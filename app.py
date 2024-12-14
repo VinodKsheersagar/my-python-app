@@ -9,8 +9,11 @@ import logging
 
 app = Flask(__name__)
 
+# Suppress Werkzeug (default HTTP request logger) logs
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 # PostgreSQL connection settings
 # DATABASE_URL = 'postgresql://postgres:kamareddy@localhost/demo'
