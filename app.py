@@ -40,11 +40,13 @@ def create_table():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS indian_stock_alerts (
+            CREATE TABLE IF NOT EXISTS vinod_india_alerts (
                 alert_id SERIAL PRIMARY KEY,
                 ticker VARCHAR(255) NOT NULL,
                 type VARCHAR(255) NOT NULL,
-                date TIMESTAMP WITH TIME ZONE NOT NULL
+                date TIMESTAMP WITH TIME ZONE NOT NULL,
+                price_increase VARCHAR(255),
+                volume_increase VARCHAR(255)      
             );
         """)
         conn.commit()
@@ -58,15 +60,15 @@ def create_table():
 create_table()
 
 # Save alert to the database
-def save_alert(ticker, alert_type, alert_time):
+def save_alert(ticker, alert_type, alert_time, price_increase, volume_increase):
     conn = pool.getconn()
     try:
         cursor = conn.cursor()
         alert_time = datetime.utcfromtimestamp(alert_time / 1000.0)  # Convert milliseconds to datetime
         cursor.execute("""
-            INSERT INTO indian_stock_alerts (ticker, type, date)
-            VALUES (%s, %s, %s);
-        """, (ticker, alert_type, alert_time))
+            INSERT INTO vinod_india_alerts (ticker, type, date, price_increase, volume_increase)
+            VALUES (%s, %s, %s, %s, %s);
+        """, (ticker, alert_type, alert_time, price_increase, volume_increase))
         conn.commit()
         # logging.info(f"Alert saved for {ticker}")
     except Exception as error:
@@ -84,7 +86,7 @@ def get_recent_alerts(ticker, since_time):
         cursor = conn.cursor()
         since_time = datetime.utcfromtimestamp(since_time / 1000.0)  # Convert milliseconds to datetime
         cursor.execute("""
-            SELECT * FROM indian_stock_alerts
+            SELECT * FROM vinod_india_alerts
             WHERE ticker = %s AND date >= %s;
         """, (ticker, since_time))
         results = cursor.fetchall()
@@ -103,7 +105,7 @@ def get_all_alerts(ticker):
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM indian_stock_alerts
+            SELECT * FROM vinod_india_alerts
             WHERE ticker = %s
             ORDER BY date DESC;
         """, (ticker,))
@@ -142,22 +144,30 @@ def send_email(ticker):
 def webhook():
     try:
         data = request.get_json()
-        logging.info(data)
-        if not data or not all(k in data for k in ["ticker", "type", "time"]):
+        # logging.info(data)
+        if not data or not all(k in data for k in ["ticker", "type", "time","price_increase","volume_increase","v_increase"]):
             raise ValueError("Invalid payload")
 
         ticker = data.get("ticker")
         alert_type = data.get("type")
         alert_time = int(data.get("time"))  # Retain milliseconds as is
+        price_increase = data.get("price_increase")
+        volume_increase = data.get("volume_increase")
+        v_increase = data.get("v_increase")
+
+
+        if float(v_increase) > 550:
+            logging.info(ticker +" Volume increased more than 550%")
+
 
         # Save alert to the database
-        save_alert(ticker, alert_type, alert_time)
+        save_alert(ticker, alert_type, alert_time, price_increase, volume_increase)
 
         # Check for high activity alerts
-        since_time = alert_time - 15 * 60 * 1000  # Subtract 15 minutes in milliseconds
+        since_time = alert_time - 6 * 60 * 1000  # Subtract 15 minutes in milliseconds
         recent_alerts = get_recent_alerts(ticker, since_time)
 
-        if len(recent_alerts) > 3:
+        if len(recent_alerts) > 2:
             logging.info("High activity alert triggered for : "+ticker +" : stock")
             # send_email(ticker)
             return jsonify({"message": "High activity alert triggered and email sent!"}), 200
