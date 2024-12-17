@@ -157,7 +157,7 @@ def webhook():
 
 
         if float(v_increase) > 550:
-            logging.info(ticker +" Volume increased more than 550%")
+            logging.info(ticker +" Volume increased by :" +volume_increase)
 
 
         # Save alert to the database
