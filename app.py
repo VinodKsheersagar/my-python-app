@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import psycopg2
 from psycopg2.pool import SimpleConnectionPool
@@ -40,13 +40,16 @@ def create_table():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS vinod_india_alerts (
+            CREATE TABLE IF NOT EXISTS priyanka_india_alerts (
                 alert_id SERIAL PRIMARY KEY,
                 ticker VARCHAR(255) NOT NULL,
-                type VARCHAR(255) NOT NULL,
-                date TIMESTAMP WITH TIME ZONE NOT NULL,
-                price_increase VARCHAR(255),
-                volume_increase VARCHAR(255)      
+                alert_time TIMESTAMP WITH TIME ZONE NOT NULL,
+                open_price VARCHAR(255),
+                high_price VARCHAR(255),
+                low_price VARCHAR(255),
+                close_price VARCHAR(255),
+                price_change_pct VARCHAR(255),
+                volume_change_pct VARCHAR(255)      
             );
         """)
         conn.commit()
@@ -60,15 +63,15 @@ def create_table():
 create_table()
 
 # Save alert to the database
-def save_alert(ticker, alert_type, alert_time, price_increase, volume_increase):
+def save_alert(ticker, alert_time, open_price, high_price,low_price, close_price, price_change_pct, volume_change_pct):
     conn = pool.getconn()
     try:
         cursor = conn.cursor()
-        alert_time = datetime.utcfromtimestamp(alert_time / 1000.0)  # Convert milliseconds to datetime
+        alert_time = datetime.fromtimestamp(alert_time / 1000.0, timezone.utc)  # Convert milliseconds to datetime
         cursor.execute("""
-            INSERT INTO vinod_india_alerts (ticker, type, date, price_increase, volume_increase)
-            VALUES (%s, %s, %s, %s, %s);
-        """, (ticker, alert_type, alert_time, price_increase, volume_increase))
+            INSERT INTO priyanka_india_alerts (ticker, alert_time, open_price, high_price,low_price, close_price, price_change_pct, volume_change_pct)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        """, (ticker, alert_time, open_price, high_price,low_price, close_price, price_change_pct, volume_change_pct))
         conn.commit()
         # logging.info(f"Alert saved for {ticker}")
     except Exception as error:
@@ -84,10 +87,10 @@ def get_recent_alerts(ticker, since_time):
     conn = pool.getconn()
     try:
         cursor = conn.cursor()
-        since_time = datetime.utcfromtimestamp(since_time / 1000.0)  # Convert milliseconds to datetime
+        since_time = datetime.fromtimestamp(since_time / 1000.0, timezone.utc)  # Convert milliseconds to datetime
         cursor.execute("""
-            SELECT * FROM vinod_india_alerts
-            WHERE ticker = %s AND date >= %s;
+            SELECT * FROM priyanka_india_alerts
+            WHERE ticker = %s AND alert_time >= %s;
         """, (ticker, since_time))
         results = cursor.fetchall()
         return results
@@ -105,7 +108,7 @@ def get_all_alerts(ticker):
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM vinod_india_alerts
+            SELECT * FROM priyanka_india_alerts
             WHERE ticker = %s
             ORDER BY date DESC;
         """, (ticker,))
@@ -145,23 +148,29 @@ def webhook():
     try:
         data = request.get_json()
         # logging.info(data)
-        if not data or not all(k in data for k in ["ticker", "type", "time","price_increase","volume_increase","v_increase"]):
+        if not data or not all(k in data for k in ["ticker", "alert_time","open_price","high_price","low_price","close_price","price_change_pct","volume_change_pct"]):
             raise ValueError("Invalid payload")
 
         ticker = data.get("ticker")
-        alert_type = data.get("type")
-        alert_time = int(data.get("time"))  # Retain milliseconds as is
-        price_increase = data.get("price_increase")
-        volume_increase = data.get("volume_increase")
-        v_increase = data.get("v_increase")
+        alert_time = int(data.get("alert_time"))  # Retain milliseconds as is
+        open_price = data.get("open_price")
+        high_price = data.get("high_price")
+        low_price = data.get("low_price")
+        close_price = data.get("close_price")
+        price_change_pct = data.get("price_change_pct")
+        volume_change_pct = data.get("volume_change_pct")
+       
 
 
-        if float(v_increase) > 550:
-            logging.info(ticker +" Volume increased by :" +volume_increase)
+        if float(volume_change_pct) > 450 and float(price_change_pct) > 0.4:
+            logging.info(ticker +" Volume increased by : " +volume_change_pct + "Price increased by : "+ price_change_pct)
+
+        if float(volume_change_pct) > 650 and float(price_change_pct) < 0.4:
+            logging.info(ticker +" Volume increased by : " +volume_change_pct + "Price increased by : "+ price_change_pct)
 
 
         # Save alert to the database
-        save_alert(ticker, alert_type, alert_time, price_increase, volume_increase)
+        save_alert(ticker, alert_time, open_price, high_price,low_price, close_price, price_change_pct, volume_change_pct)
 
         # Check for high activity alerts
         since_time = alert_time - 6 * 60 * 1000  # Subtract 15 minutes in milliseconds
