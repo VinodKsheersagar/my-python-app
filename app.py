@@ -163,7 +163,7 @@ def webhook():
 
 
         if float(volume_change_pct) > 450 and float(price_change_pct) > 0.4:
-            logging.info(ticker +"Volume and Price both are high, Volume increased by : " +volume_change_pct + "Price increased by : "+ price_change_pct)
+            logging.info(ticker +" :Volume and Price both are high, Volume increased by : " +volume_change_pct + "Price increased by : "+ price_change_pct)
 
         if float(volume_change_pct) > 650 and float(price_change_pct) < 0.4:
             logging.info(ticker +" Volume is high,but Price increase is low Volume increased by : " +volume_change_pct + "Price increased by : "+ price_change_pct)
